@@ -1,10 +1,10 @@
-# Оценка качества разметки (IoU)
+# Annotation Quality Assessment (IoU)
 
-Скрипт сравнивает разметку изображения (`annotated/`) с эталоном (`ground_truth/`). Для каждого объекта он выводит процент совпадения: IoU, то есть площадь пересечения, делённая на площадь объединения. По всей картинке считается итоговая оценка Σ пересечений / Σ объединений. В ней ошибка на большом объекте весит больше, чем на маленьком.
+The script compares an image annotation (`annotated/`) against the ground truth (`ground_truth/`). For each object it reports the match percentage as IoU: the intersection area divided by the union area. For the whole image it computes a total score, Σ intersections / Σ unions, so an error on a large object weighs more than an error on a small one.
 
-## Запуск
+## Running
 
-Нужен Python 3.10+ (используется `match`). Проверено на 3.13.
+Requires Python 3.10+ (the code uses `match`). Tested on 3.13.
 
 ```bash
 python -m venv .venv
@@ -12,23 +12,23 @@ python -m venv .venv
 .venv/bin/python main.py
 ```
 
-Результат печатается в консоль и сохраняется в `report.txt`.
+The result is printed to the console and saved to `report.txt`.
 
-### Входные данные
+### Input data
 
-Данные в репозиторий не входят (`.gitignore`). Скрипт ожидает такую структуру:
+The data is not included in the repository (`.gitignore`). The script expects the following structure:
 
 ```
 ground_truth/
   road.jpg.json
-  road.jpg.images/00001/<nm>.png   # маски полигонов эталона
+  road.jpg.images/00001/<nm>.png   # ground truth polygon masks
 annotated/
   road.jpg.json
 ```
 
-Если данных нет, готовый результат лежит в [`report.txt`](report.txt).
+If the data is not available, the ready result is in [`report.txt`](report.txt).
 
-## Результат
+## Result
 
 ```
 GT(nm)   Annotated(nm)   Type                                    GT px  Ann px      IoU
@@ -46,35 +46,35 @@ GT(nm)   Annotated(nm)   Type                                    GT px  Ann px  
 Total IoU: 49.3% (8904 / 18063 px)
 ```
 
-Итог около 49% определяют барьеры: в разметке они обведены примерно вдвое больше эталона. Пропуск и ложное срабатывание — маленькие объекты, на итог они влияют слабо.
+The total of about 49% is driven by the barriers: in the annotation they are outlined roughly twice as large as in the ground truth. The missed object and the false positive are both small, so they barely affect the total.
 
-## Как это работает
+## How it works
 
-1. **Загрузка** (`loader.py`). Метаданные объектов и их геометрия лежат в разных частях JSON, они склеиваются по `nm`.
-2. **Маски** (`picture_object.py`). Каждый объект превращается в булеву маску размером с кадр, IoU считается попиксельно. Способ построения маски зависит от данных:
-   - полигон с вершинами (`path`, разметка) растеризуется через Pillow;
-   - полигон без вершин (эталон) читается из PNG-маски по индексу палитры;
-   - bBox строится по правилу инструмента разметки: координаты округляются вниз, правая и нижняя граница не включается. Правило сверено с PNG-масками эталона до пикселя.
-3. **Сопоставление** (`matching.py`). `nm` в эталоне и разметке не совпадают, поэтому объекты сопоставляются по геометрии:
-   - считаются матрицы пересечений и объединений для всех пар;
-   - пары выбираются жадно, по убыванию IoU, каждый объект участвует не более чем в одной паре;
-   - тип объекта на сопоставление не влияет, несовпадение типов отмечается в отчёте как `mismatch`;
-   - порога нет: парой считается любое пересечение с IoU > 0.
-4. **Итог.** Объекты без пары получают 0%. Пропуски из эталона и ложные срабатывания из разметки добавляют свою площадь в Σ объединений.
-5. **Отчёт** (`report.py`). Одна и та же таблица выводится в консоль и в файл.
+1. **Loading** (`loader.py`). Object metadata and geometry are stored in different parts of the JSON; they are merged by `nm`.
+2. **Masks** (`picture_object.py`). Each object is converted into a boolean mask the size of the frame, and IoU is computed pixel by pixel. The way a mask is built depends on the data:
+   - a polygon with vertices (`path`, annotation) is rasterized with Pillow;
+   - a polygon without vertices (ground truth) is read from the PNG mask by palette index;
+   - a bBox is built using the annotation tool's rule: coordinates are rounded down, and the right and bottom edges are excluded. The rule was verified pixel-exact against the ground truth PNG masks.
+3. **Matching** (`matching.py`). `nm` values in the ground truth and the annotation do not correspond, so objects are matched by geometry:
+   - intersection and union matrices are computed for all pairs;
+   - pairs are chosen greedily in descending order of IoU, and each object takes part in at most one pair;
+   - the object type does not affect matching; a type mismatch is marked as `mismatch` in the report;
+   - there is no threshold: any intersection with IoU > 0 counts as a pair.
+4. **Total.** Objects without a pair get 0%. Missed ground truth objects and false positives from the annotation add their area to Σ unions.
+5. **Report** (`report.py`). The same table is printed to the console and written to the file.
 
-## Проверка
+## Verification
 
-- Эталон, сравнённый сам с собой, даёт 100% на каждом объекте.
-- Маски bBox из координат совпадают с PNG-масками эталона до пикселя.
-- Венгерский алгоритм (`scipy`) на этих данных дал те же пары и тот же итог, что и жадный.
+- The ground truth compared with itself gives 100% for every object.
+- bBox masks built from coordinates match the ground truth PNG masks pixel-exact.
+- A separate cross-check with the Hungarian algorithm (`scipy`, not part of the code) produced the same pairs and the same total as the greedy one on this data.
 
-## Использование ИИ
+## AI usage
 
-В [`AI_USAGE.md`](AI_USAGE.md) отражены ключевые моменты: как использовался ИИ, какие решения принимались и кем, проверки и ограничения. Полный лог переписки — `docs/ai_chat_log.md`.
+[`AI_USAGE.md`](AI_USAGE.md) covers the key points: how AI was used, which decisions were made and by whom, verification and limitations. The chat log is in `docs/ai_chat_log.md`.
 
-## Ограничения
+## Limitations
 
-- Имя картинки (`road.jpg`) и номер кадра (`00001`) заданы в `main.py` и `loader.py`.
-- Из `path` берётся только первый контур. В текущих данных он всегда один.
-- Полигоны разметки растеризуются Pillow, а он включает граничные пиксели. Возможно смещение на пиксель относительно правила, по которому сделаны маски эталона. Проверить это нельзя: у эталона нет вершин полигонов.
+- The image name (`road.jpg`) and the frame number (`00001`) are hardcoded in `main.py` and `loader.py`.
+- Only the first contour of `path` is used. In the current data there is always exactly one.
+- Annotation polygons are rasterized by Pillow, which includes boundary pixels. There may be a one-pixel offset relative to the rule used to produce the ground truth masks. This cannot be verified: the ground truth has no polygon vertices.

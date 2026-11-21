@@ -37,7 +37,7 @@ class PictureObject:
     def _mask_from_bbox(coords, image_size):
         width, height = image_size
         mask = np.zeros((height, width), dtype=bool)
-        x1, y1 = math.floor(coords["x1"]), math.floor(coords["y1"])
+        x1, y1 = max(0, math.floor(coords["x1"])), max(0, math.floor(coords["y1"]))
         x2, y2 = math.floor(coords["x2"]), math.floor(coords["y2"])
         mask[y1:y2, x1:x2] = True
         return mask
